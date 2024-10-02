@@ -1,47 +1,21 @@
-// moved from App.js [
-
-// useContext auto-imported with tab when defining `useCurrentUser`
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { axiosReq, axiosRes } from "../api/axiosDefaults";
+import { useHistory } from "react-router-dom";
 
 export const CurrentUserContext = createContext();
 export const SetCurrentUserContext = createContext();
 
-// ]
-
-/**
- * In NavBar.js, at the top of the NavBar arrow function,
- * the value of the currentUser variable is now a call
- * of the imported useCurrentUser method, still with the role
- * of being used at the return section to condition navbar.
- * 
- * i.e. const currentUser = useCurrentUser();
-*/
-
 export const useCurrentUser = () => useContext(CurrentUserContext);
-
-/**
- * In SignInForm.js, at the top of the SignInForm() function,
- * the value of the setCurrentUser variable is now a call
- * of the imported useSetCurrentUser method, still with the role
- * of being used inside the handleSubmit method during login.
- * 
- * i.e. const setCurrentUser = useSetCurrentUser();
-*/
-
 export const useSetCurrentUser = () => useContext(SetCurrentUserContext);
 
-// <CurrentUserProvider> custom tag imported and used in index.js
-
 export const CurrentUserProvider = ({ children }) => {
-
-    // moved from App.js [
-
     const [currentUser, setCurrentUser] = useState(null);
+    const history = useHistory();
 
     const handleMount = async () => {
         try {
-            const { data } = await axios.get('dj-rest-auth/user/');
+            const { data } = await axiosRes.get('dj-rest-auth/user/');
             setCurrentUser(data);
         } catch (err) {
             console.log(err);
@@ -52,21 +26,60 @@ export const CurrentUserProvider = ({ children }) => {
         handleMount();
     }, []);
 
-    // ]
+    useMemo(() => {
+        // request interceptor code included pre-emptively
+        axiosReq.interceptors.request.use(
+            async (config) => {
+                try {
+                    await axios.post("/dj-rest-auth/token/refresh/");
+                } catch (err) {
+                    setCurrentUser((prevCurrentUser) => {
+                        if (prevCurrentUser) {
+                            history.push("/signin");
+                        }
+                        return null;
+                    });
+                    return config;
+                }
+                return config;
+            },
+            (err) => {
+                return Promise.reject(err);
+            }
+        );
+
+        axiosRes.interceptors.response.use(
+            // If no error, simply return response
+            (response) => response,
+            async (err) => {
+                if (err.response?.status === 401) {
+                    try {
+                        // Try refreshing token
+                        await axios.post("/dj-rest-auth/token/refresh/");
+                    } catch (err) {
+                        setCurrentUser(prevCurrentUser => {
+                            if (prevCurrentUser) {
+                                // Redirect to sign-in page
+                                history.push("/signin");
+                            }
+                            // Sign out
+                            return null;
+                        });
+                    }
+                    // End interceptor
+                    return axios(err.config);
+                }
+                return Promise.reject(err);
+            }
+        );
+
+    }, [history]);
 
     return (
-
-        // wrappers moved from App.js [
-
         <CurrentUserContext.Provider value={currentUser}>
             <SetCurrentUserContext.Provider value={setCurrentUser}>
-
                 {children}
-
             </SetCurrentUserContext.Provider>
         </CurrentUserContext.Provider>
-
-        // ]
-
     );
 };
