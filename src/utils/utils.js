@@ -1,4 +1,6 @@
+import jwtDecode from "jwt-decode";
 import { axiosReq } from "../api/axiosDefaults";
+
 export const fetchMoreData = async (resource, setResource) => {
     try {
         const { data } = await axiosReq.get(resource.next);
@@ -15,6 +17,7 @@ export const fetchMoreData = async (resource, setResource) => {
         }));
     } catch (err) { }
 };
+
 export const followHelper = (profile, clickedProfile, following_id) => {
     return profile.id === clickedProfile.id
         ? // This is the profile I clicked on,
@@ -49,4 +52,17 @@ export const unfollowHelper = (profile, clickedProfile) => {
             : // this is not the profile the user clicked on or the profile
             // the user owns, so just return it unchanged
             profile;
+};
+
+export const setTokenTimestamp = (data) => {
+    const refreshTokenTimestamp = jwtDecode(data?.refresh_token).exp;
+    localStorage.setItem("refreshTokenTimestamp", refreshTokenTimestamp);
+};
+
+export const shouldRefreshToken = () => {
+    return !!localStorage.getItem("refreshTokenTimestamp");
+};
+
+export const removeTokenTimestamp = () => {
+    localStorage.removeItem("refreshTokenTimestamp");
 };
